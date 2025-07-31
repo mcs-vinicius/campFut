@@ -107,13 +107,14 @@ const AdminRoundsPage = () => {
   const [roundsData, setRoundsData] = useState({});
   const [isLoading, setIsLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
-  const ROUNDS_PER_PAGE = 2; // Você pode ajustar este número
+  const ROUNDS_PER_PAGE = 2;
 
   useEffect(() => {
     const fetchRounds = async () => {
       try {
         const response = await authApi.get('/rounds');
-        setRoundsData(response.data);
+        // ***** CORREÇÃO AQUI: Acessamos response.data.rounds *****
+        setRoundsData(response.data.rounds);
       } catch (error) {
         console.error("Erro ao buscar as rodadas:", error);
       } finally {
@@ -152,7 +153,6 @@ const AdminRoundsPage = () => {
     return <p>Nenhuma partida gerada. Inicie o campeonato na aba 'Participantes'.</p>;
   }
 
-  // Lógica de paginação
   const totalPages = Math.ceil(roundKeys.length / ROUNDS_PER_PAGE);
   const indexOfLastRound = currentPage * ROUNDS_PER_PAGE;
   const indexOfFirstRound = indexOfLastRound - ROUNDS_PER_PAGE;
