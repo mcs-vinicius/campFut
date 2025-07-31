@@ -85,12 +85,19 @@ const LoadingMessage = styled.p`
   color: #00F2EA;
 `;
 
+const HelperText = styled.p`
+  color: #aaa;
+  margin-top: 0.5rem;
+  font-size: 0.9rem;
+`;
+
 const SettingsPage = () => {
   const [settings, setSettings] = useState({
     num_turns: '1',
     wo_score_winner: '3',
     wo_score_loser: '0',
-    championship_status: 'SETUP'
+    championship_status: 'SETUP',
+    num_rounds: '0'
   });
   const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
@@ -163,16 +170,28 @@ const SettingsPage = () => {
     <SettingsContainer>
       <div>
         <h2>Configurações do Campeonato</h2>
-        <p style={{color: '#aaa', marginTop: '0.5rem'}}>Atenção: Estas configurações devem ser definidas antes de iniciar um campeonato.</p>
+        <HelperText>
+          Defina aqui as regras principais do torneio. Deixe 'Rodadas' como 0 para usar o cálculo automático.
+        </HelperText>
         <br />
         <SettingRow>
-          <Label htmlFor="num_turns">Número de Turnos</Label>
+          <Label htmlFor="num_turns">Quantidade de Turnos (1 = turno único; 2 = ida e volta)</Label>
           <Input 
             type="number" id="num_turns" name="num_turns"
             min="1" max="4" value={settings.num_turns}
             onChange={handleInputChange} disabled={isChampionshipFinished}
           />
         </SettingRow>
+
+        <SettingRow>
+          <Label htmlFor="num_rounds">Número Máximo de Rodadas (0 = automático)</Label>
+          <Input 
+            type="number" id="num_rounds" name="num_rounds"
+            min="0" value={settings.num_rounds}
+            onChange={handleInputChange} disabled={isChampionshipFinished}
+          />
+        </SettingRow>
+
         <SettingRow>
           <Label htmlFor="wo_score_winner">Placar do Vencedor (W.O.)</Label>
           <Input 

@@ -20,7 +20,8 @@ def get_settings():
         'num_turns': '1',
         'wo_score_winner': '3',
         'wo_score_loser': '0',
-        'championship_status': 'SETUP'
+        'championship_status': 'SETUP',
+        'num_rounds': '0' # Adiciona o novo campo com padrão '0' (ilimitado)
     }
     for setting in settings:
         settings_dict[setting.key] = setting.value
@@ -120,13 +121,10 @@ def delete_participant(participant_id):
 @api_bp.route('/participants/import', methods=['POST'])
 @jwt_required()
 def import_participants():
-    if 'file' not in request.files:
-        return jsonify({"msg": "Nenhum arquivo enviado."}), 400
+    if 'file' not in request.files: return jsonify({"msg": "Nenhum arquivo enviado."}), 400
     file = request.files['file']
-    if file.filename == '':
-        return jsonify({"msg": "Nenhum arquivo selecionado."}), 400
-    if not file.filename.lower().endswith('.csv'):
-        return jsonify({"msg": "Formato de arquivo inválido. Use .csv"}), 400
+    if file.filename == '': return jsonify({"msg": "Nenhum arquivo selecionado."}), 400
+    if not file.filename.lower().endswith('.csv'): return jsonify({"msg": "Formato de arquivo inválido. Use .csv"}), 400
     try:
         stream = io.StringIO(file.stream.read().decode("UTF-8"), newline=None)
         csv_reader = csv.reader(stream)
@@ -151,35 +149,50 @@ def import_participants():
 @api_bp.route('/championship/start', methods=['POST'])
 @jwt_required()
 def start_championship():
-    if Match.query.count() > 0:
-        return jsonify({"msg": "O campeonato já foi iniciado."}), 400
+    if Match.query.count() > 0: return jsonify({"msg": "O campeonato já foi iniciado."}), 400
     participants = Participant.query.all()
-    if len(participants) < 2:
-        return jsonify({"msg": "É necessário ter pelo menos 2 participantes para iniciar."}), 400
+    if len(participants) < 2: return jsonify({"msg": "É necessário ter pelo menos 2 participantes para iniciar."}), 400
+    
+    # Busca as configurações de turnos e rodadas
     num_turns_setting = ChampionshipSetting.query.filter_by(key='num_turns').first()
+    num_rounds_setting = ChampionshipSetting.query.filter_by(key='num_rounds').first()
+
     num_turns = int(num_turns_setting.value) if num_turns_setting else 1
+    max_rounds = int(num_rounds_setting.value) if num_rounds_setting and int(num_rounds_setting.value) > 0 else None
+
     participant_ids = [p.id for p in participants]
-    fixtures = generate_round_robin_fixtures(participant_ids, num_turns=num_turns)
-    for round_data in fixtures:
+    
+    # Gera a tabela completa de jogos
+    full_fixtures = generate_round_robin_fixtures(participant_ids, num_turns=num_turns)
+    
+    # Filtra as rodadas se um limite foi especificado
+    fixtures_to_save = []
+    if max_rounds:
+        for round_data in full_fixtures:
+            if round_data['round'] <= max_rounds:
+                fixtures_to_save.append(round_data)
+    else:
+        fixtures_to_save = full_fixtures
+
+    for round_data in fixtures_to_save:
         round_number = round_data['round']
         for match_tuple in round_data['matches']:
             p1_id, p2_id = match_tuple
             new_match = Match(round_number=round_number, participant1_id=p1_id, participant2_id=p2_id, status='PENDING')
             db.session.add(new_match)
+            
     db.session.commit()
-    return jsonify({"msg": f"Campeonato iniciado com {num_turns} turno(s)! {Match.query.count()} partidas foram geradas."}), 201
+    return jsonify({"msg": f"Campeonato iniciado! {Match.query.count()} partidas geradas."}), 201
 
 @api_bp.route('/matches/<int:match_id>', methods=['PUT'])
 @jwt_required()
 def update_match_result(match_id):
     match = Match.query.get_or_404(match_id)
-    if match.status == 'FINISHED':
-        return jsonify({"msg": "Esta partida já foi finalizada."}), 400
+    if match.status == 'FINISHED': return jsonify({"msg": "Esta partida já foi finalizada."}), 400
     data = request.get_json()
     score1 = data.get('score1')
     score2 = data.get('score2')
-    if score1 is None or score2 is None:
-        return jsonify({"msg": "Ambos os placares são obrigatórios."}), 400
+    if score1 is None or score2 is None: return jsonify({"msg": "Ambos os placares são obrigatórios."}), 400
     match.score1 = int(score1)
     match.score2 = int(score2)
     match.status = 'FINISHED'
@@ -191,12 +204,10 @@ def update_match_result(match_id):
 @jwt_required()
 def assign_walkover(match_id):
     match = Match.query.get_or_404(match_id)
-    if match.status == 'FINISHED':
-        return jsonify({"msg": "Esta partida já foi finalizada."}), 400
+    if match.status == 'FINISHED': return jsonify({"msg": "Esta partida já foi finalizada."}), 400
     data = request.get_json()
     absent_participant_id = data.get('absent_participant_id')
-    if not absent_participant_id:
-        return jsonify({"msg": "É necessário informar o tipo de W.O."}), 400
+    if not absent_participant_id: return jsonify({"msg": "É necessário informar o tipo de W.O."}), 400
     if absent_participant_id == 'double':
         match.score1 = 0
         match.score2 = 0

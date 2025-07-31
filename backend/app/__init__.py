@@ -16,7 +16,11 @@ def create_app(config_class=DevelopmentConfig):
     app = Flask(__name__)
     app.config.from_object(config_class)
 
-    # A linha "CORS(app)" foi REMOVIDA daqui
+    # Configuração do CORS movida para ser mais explícita
+    # Isso permite os cabeçalhos necessários para a autenticação
+    CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
+    CORS(app, resources={r"/auth/*": {"origins": "*"}}, supports_credentials=True)
+
 
     db.init_app(app)
     migrate.init_app(app, db)
@@ -27,17 +31,25 @@ def create_app(config_class=DevelopmentConfig):
         from .auth import auth_bp
         from .routes import api_bp
         
-        # APLICAMOS O CORS DIRETAMENTE NOS BLUEPRINTS
-        # Isso garante que ele lide com OPTIONS antes do @jwt_required
-        CORS(auth_bp)
-        CORS(api_bp)
-        
         app.register_blueprint(auth_bp, url_prefix='/auth')
         app.register_blueprint(api_bp, url_prefix='/api')
 
         @app.cli.command("create-admin")
         def create_admin():
-            # ... (código do comando create-admin)
-            pass
+            from .models import Admin
+            from getpass import getpass
+            
+            username = input("Digite o nome de usuário do admin: ")
+            password = getpass("Digite a senha do admin: ")
+            
+            if Admin.query.filter_by(username=username).first():
+                print(f"Usuário '{username}' já existe.")
+                return
+
+            admin = Admin(username=username)
+            admin.set_password(password)
+            db.session.add(admin)
+            db.session.commit()
+            print(f"Admin '{username}' criado com sucesso!")
 
     return app
