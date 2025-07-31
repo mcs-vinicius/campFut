@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
-import api from '../../services/api'; // Usamos a API pública
+import { Link } from 'react-router-dom';
+import api from '../../services/api';
 import PublicMatchCard from '../../components/PublicMatchCard';
 
 const PageContainer = styled.div`
@@ -18,6 +19,26 @@ const Header = styled.header`
   h1 {
     font-size: 3rem;
     text-shadow: 0 0 10px #00F2EA;
+    margin-bottom: 1rem;
+  }
+`;
+
+const NavLink = styled(Link)`
+  display: inline-block;
+  padding: 10px 20px;
+  background-color: #1D193B;
+  border: 1px solid #00F2EA;
+  border-radius: 4px;
+  color: #00F2EA;
+  text-decoration: none;
+  font-family: 'Orbitron', sans-serif;
+  font-weight: bold;
+  transition: all 0.3s ease;
+
+  &:hover {
+    background-color: #00F2EA;
+    color: #0B071B;
+    box-shadow: 0 0 15px #00F2EA;
   }
 `;
 
@@ -79,13 +100,22 @@ const RoundsPage = () => {
   const roundKeys = Object.keys(roundsData);
 
   if (roundKeys.length === 0) {
-    return <p>Nenhuma partida encontrada. O campeonato ainda não foi iniciado.</p>;
+    return (
+      <PageContainer>
+        <Header>
+          <h1>Rodadas do Campeonato</h1>
+          <NavLink to="/">Ver Tabela de Classificação</NavLink>
+        </Header>
+        <p style={{textAlign: 'center'}}>Nenhuma partida encontrada. O campeonato ainda não foi iniciado.</p>
+      </PageContainer>
+    );
   }
 
   return (
     <PageContainer>
       <Header>
         <h1>Rodadas do Campeonato</h1>
+        <NavLink to="/">Ver Tabela de Classificação</NavLink>
       </Header>
       <RoundsContainer>
         {roundKeys.map(roundNumber => (

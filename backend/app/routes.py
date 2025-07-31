@@ -14,14 +14,13 @@ api_bp = Blueprint('api_bp', __name__)
 @api_bp.route('/settings', methods=['GET'])
 @jwt_required()
 def get_settings():
-    """Retorna todas as configurações do campeonato."""
     settings = ChampionshipSetting.query.all()
     settings_dict = {
         'num_turns': '1',
         'wo_score_winner': '3',
         'wo_score_loser': '0',
         'championship_status': 'SETUP',
-        'num_rounds': '0' # Adiciona o novo campo com padrão '0' (ilimitado)
+        'num_rounds': '0'
     }
     for setting in settings:
         settings_dict[setting.key] = setting.value
@@ -30,7 +29,6 @@ def get_settings():
 @api_bp.route('/settings', methods=['PUT'])
 @jwt_required()
 def update_settings():
-    """Atualiza as configurações do campeonato."""
     data = request.get_json()
     for key, value in data.items():
         setting = ChampionshipSetting.query.filter_by(key=key).first()
@@ -45,7 +43,6 @@ def update_settings():
 @api_bp.route('/championship/end', methods=['POST'])
 @jwt_required()
 def end_championship():
-    """Define o status do campeonato como finalizado."""
     status_setting = ChampionshipSetting.query.filter_by(key='championship_status').first()
     if not status_setting:
         status_setting = ChampionshipSetting(key='championship_status', value='FINISHED')
@@ -59,14 +56,27 @@ def end_championship():
 @jwt_required()
 def reset_championship():
     """
-    Reinicia o campeonato, deletando todas as partidas e configurações.
-    Os participantes são mantidos.
+    Reinicia o campeonato, deletando todas as partidas, configurações
+    e zerando as estatísticas dos participantes.
     """
     try:
+        # Deleta todas as partidas e configurações
         Match.query.delete()
         ChampionshipSetting.query.delete()
+
+        # Zera as estatísticas de todos os participantes
+        participants = Participant.query.all()
+        for p in participants:
+            p.games_played = 0
+            p.wins = 0
+            p.draws = 0
+            p.losses = 0
+            p.goals_for = 0
+            p.goals_against = 0
+            p.ptc_bonus_count = 0
+        
         db.session.commit()
-        return jsonify({"msg": "Campeonato reiniciado com sucesso! Todos os jogos e configurações foram apagados."})
+        return jsonify({"msg": "Campeonato reiniciado com sucesso! Todos os jogos, configurações e estatísticas foram apagados."})
     except Exception as e:
         db.session.rollback()
         return jsonify({"msg": f"Erro ao reiniciar o campeonato: {e}"}), 500
@@ -101,10 +111,8 @@ def get_participants():
 def add_participant():
     data = request.get_json()
     name = data.get('name')
-    if not name:
-        return jsonify({"msg": "O nome do participante é obrigatório"}), 400
-    if Participant.query.filter_by(name=name).first():
-        return jsonify({"msg": f"Participante '{name}' já existe"}), 409
+    if not name: return jsonify({"msg": "O nome do participante é obrigatório"}), 400
+    if Participant.query.filter_by(name=name).first(): return jsonify({"msg": f"Participante '{name}' já existe"}), 409
     new_participant = Participant(name=name)
     db.session.add(new_participant)
     db.session.commit()
@@ -128,8 +136,7 @@ def import_participants():
     try:
         stream = io.StringIO(file.stream.read().decode("UTF-8"), newline=None)
         csv_reader = csv.reader(stream)
-        new_participants_count = 0
-        added_names = []
+        new_participants_count = 0; added_names = []
         existing_names = {p.name.lower() for p in Participant.query.all()}
         for row in csv_reader:
             if row:
@@ -152,20 +159,12 @@ def start_championship():
     if Match.query.count() > 0: return jsonify({"msg": "O campeonato já foi iniciado."}), 400
     participants = Participant.query.all()
     if len(participants) < 2: return jsonify({"msg": "É necessário ter pelo menos 2 participantes para iniciar."}), 400
-    
-    # Busca as configurações de turnos e rodadas
     num_turns_setting = ChampionshipSetting.query.filter_by(key='num_turns').first()
     num_rounds_setting = ChampionshipSetting.query.filter_by(key='num_rounds').first()
-
     num_turns = int(num_turns_setting.value) if num_turns_setting else 1
     max_rounds = int(num_rounds_setting.value) if num_rounds_setting and int(num_rounds_setting.value) > 0 else None
-
     participant_ids = [p.id for p in participants]
-    
-    # Gera a tabela completa de jogos
     full_fixtures = generate_round_robin_fixtures(participant_ids, num_turns=num_turns)
-    
-    # Filtra as rodadas se um limite foi especificado
     fixtures_to_save = []
     if max_rounds:
         for round_data in full_fixtures:
@@ -173,14 +172,12 @@ def start_championship():
                 fixtures_to_save.append(round_data)
     else:
         fixtures_to_save = full_fixtures
-
     for round_data in fixtures_to_save:
         round_number = round_data['round']
         for match_tuple in round_data['matches']:
             p1_id, p2_id = match_tuple
             new_match = Match(round_number=round_number, participant1_id=p1_id, participant2_id=p2_id, status='PENDING')
             db.session.add(new_match)
-            
     db.session.commit()
     return jsonify({"msg": f"Campeonato iniciado! {Match.query.count()} partidas geradas."}), 201
 
@@ -209,14 +206,10 @@ def assign_walkover(match_id):
     absent_participant_id = data.get('absent_participant_id')
     if not absent_participant_id: return jsonify({"msg": "É necessário informar o tipo de W.O."}), 400
     if absent_participant_id == 'double':
-        match.score1 = 0
-        match.score2 = 0
-        match.status = 'FINISHED'
+        match.score1 = 0; match.score2 = 0; match.status = 'FINISHED'
         if match.participant1 and match.participant2:
-            match.participant1.games_played += 1
-            match.participant1.losses += 1
-            match.participant2.games_played += 1
-            match.participant2.losses += 1
+            match.participant1.games_played += 1; match.participant1.losses += 1
+            match.participant2.games_played += 1; match.participant2.losses += 1
     else:
         wo_winner_setting = ChampionshipSetting.query.filter_by(key='wo_score_winner').first()
         wo_loser_setting = ChampionshipSetting.query.filter_by(key='wo_score_loser').first()
@@ -225,11 +218,9 @@ def assign_walkover(match_id):
         try:
             absent_id = int(absent_participant_id)
             if absent_id == match.participant1_id:
-                match.score1 = WO_SCORE_LOSER
-                match.score2 = WO_SCORE_WINNER
+                match.score1 = WO_SCORE_LOSER; match.score2 = WO_SCORE_WINNER
             elif absent_id == match.participant2_id:
-                match.score1 = WO_SCORE_WINNER
-                match.score2 = WO_SCORE_LOSER
+                match.score1 = WO_SCORE_WINNER; match.score2 = WO_SCORE_LOSER
             else:
                 return jsonify({"msg": "Participante ausente inválido para esta partida."}), 400
             update_stats_from_match(match)
