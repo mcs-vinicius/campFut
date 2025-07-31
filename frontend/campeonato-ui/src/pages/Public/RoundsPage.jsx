@@ -42,12 +42,6 @@ const NavLink = styled(Link)`
   }
 `;
 
-const RoundsContainer = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 2.5rem;
-`;
-
 const RoundSection = styled.section`
   background-color: #1D193B55;
   padding: 1.5rem;
@@ -74,15 +68,44 @@ const LoadingMessage = styled.p`
   color: #00F2EA;
 `;
 
+const PaginationContainer = styled.div`
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+`;
+
+const PageButton = styled.button`
+  padding: 8px 14px;
+  border: 1px solid #3c3866;
+  border-radius: 4px;
+  font-weight: bold;
+  cursor: pointer;
+  
+  /* Estilo para rodada finalizada */
+  background-color: ${props => props.$isFinished ? '#343a40' : (props.active ? '#00F2EA' : 'transparent')};
+  color: ${props => props.$isFinished ? '#aaa' : (props.active ? '#0B071B' : '#EAEAF2')};
+  border-color: ${props => props.$isFinished ? '#555' : '#3c3866'};
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+`;
+
 const RoundsPage = () => {
   const [roundsData, setRoundsData] = useState({});
+  const [activeRound, setActiveRound] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const fetchRounds = async () => {
       try {
         const response = await api.get('/rounds');
-        setRoundsData(response.data);
+        setRoundsData(response.data.rounds);
+        setActiveRound(response.data.currentRound);
       } catch (error) {
         console.error("Erro ao buscar as rodadas:", error);
       } finally {
@@ -98,14 +121,12 @@ const RoundsPage = () => {
   }
 
   const roundKeys = Object.keys(roundsData);
+  const currentRoundMatches = activeRound ? roundsData[activeRound] : [];
 
   if (roundKeys.length === 0) {
     return (
       <PageContainer>
-        <Header>
-          <h1>Rodadas do Campeonato</h1>
-          <NavLink to="/">Ver Tabela de Classificação</NavLink>
-        </Header>
+        <Header><h1>Rodadas do Campeonato</h1><NavLink to="/">Ver Tabela de Classificação</NavLink></Header>
         <p style={{textAlign: 'center'}}>Nenhuma partida encontrada. O campeonato ainda não foi iniciado.</p>
       </PageContainer>
     );
@@ -117,18 +138,33 @@ const RoundsPage = () => {
         <h1>Rodadas do Campeonato</h1>
         <NavLink to="/">Ver Tabela de Classificação</NavLink>
       </Header>
-      <RoundsContainer>
-        {roundKeys.map(roundNumber => (
-          <RoundSection key={roundNumber}>
-            <RoundTitle>Rodada {roundNumber}</RoundTitle>
-            <MatchesContainer>
-              {roundsData[roundNumber].map(match => (
-                <PublicMatchCard key={match.id} match={match} />
-              ))}
-            </MatchesContainer>
-          </RoundSection>
-        ))}
-      </RoundsContainer>
+
+      <PaginationContainer>
+        {roundKeys.map(roundNumber => {
+          const isFinished = roundsData[roundNumber].every(match => match.status === 'FINISHED');
+          return (
+            <PageButton 
+              key={roundNumber}
+              active={parseInt(roundNumber) === activeRound}
+              $isFinished={isFinished}
+              onClick={() => setActiveRound(parseInt(roundNumber))}
+            >
+              {roundNumber}
+            </PageButton>
+          )
+        })}
+      </PaginationContainer>
+
+      {activeRound && (
+        <RoundSection>
+          <RoundTitle>Rodada {activeRound}</RoundTitle>
+          <MatchesContainer>
+            {currentRoundMatches.map(match => (
+              <PublicMatchCard key={match.id} match={match} />
+            ))}
+          </MatchesContainer>
+        </RoundSection>
+      )}
     </PageContainer>
   );
 };

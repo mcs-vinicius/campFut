@@ -55,16 +55,9 @@ def end_championship():
 @api_bp.route('/championship/reset', methods=['POST'])
 @jwt_required()
 def reset_championship():
-    """
-    Reinicia o campeonato, deletando todas as partidas, configurações
-    e zerando as estatísticas dos participantes.
-    """
     try:
-        # Deleta todas as partidas e configurações
         Match.query.delete()
         ChampionshipSetting.query.delete()
-
-        # Zera as estatísticas de todos os participantes
         participants = Participant.query.all()
         for p in participants:
             p.games_played = 0
@@ -74,7 +67,6 @@ def reset_championship():
             p.goals_for = 0
             p.goals_against = 0
             p.ptc_bonus_count = 0
-        
         db.session.commit()
         return jsonify({"msg": "Campeonato reiniciado com sucesso! Todos os jogos, configurações e estatísticas foram apagados."})
     except Exception as e:
@@ -88,6 +80,7 @@ def get_ranking_public():
     ranking = get_sorted_ranking()
     return jsonify(ranking), 200
 
+# ***** FUNÇÃO ATUALIZADA *****
 @api_bp.route('/rounds', methods=['GET'])
 def get_rounds_public():
     matches = Match.query.order_by(Match.round_number, Match.id).all()
@@ -96,7 +89,24 @@ def get_rounds_public():
         if match.round_number not in rounds:
             rounds[match.round_number] = []
         rounds[match.round_number].append(match.to_dict())
-    return jsonify(rounds), 200
+
+    # Lógica para encontrar a rodada atual
+    current_round = 1
+    if rounds:
+        sorted_round_keys = sorted(rounds.keys())
+        all_rounds_finished = True
+        for round_key in sorted_round_keys:
+            is_round_complete = all(match['status'] == 'FINISHED' for match in rounds[round_key])
+            if not is_round_complete:
+                current_round = round_key
+                all_rounds_finished = False
+                break
+        # Se todas as rodadas terminaram, a "atual" é a última
+        if all_rounds_finished:
+            current_round = sorted_round_keys[-1] if sorted_round_keys else 1
+            
+    # Retorna os dados das rodadas E a rodada atual
+    return jsonify({"rounds": rounds, "currentRound": int(current_round)})
 
 
 # --- ROTAS DE ADMINISTRAÇÃO ---
